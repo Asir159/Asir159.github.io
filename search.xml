@@ -113,21 +113,9 @@
 <hr>
 <hr>
 ]]></content>
-      <categories>
-        <category>学习笔记</category>
-      </categories>
       <tags>
         <tag>测试</tag>
         <tag>Hexo</tag>
-        <tag>1234</tag>
-        <tag>n</tag>
-        <tag>w</tag>
-        <tag>z</tag>
-        <tag>k</tag>
-        <tag>e</tag>
-        <tag>b</tag>
-        <tag>a</tag>
-        <tag>xxxxxxxxxxxxxxxx</tag>
       </tags>
   </entry>
   <entry>
@@ -153,25 +141,8 @@
       </categories>
       <tags>
         <tag>Hexo</tag>
-        <tag>1234</tag>
         <tag>测试1</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>基于G4的GPIO复用</title>
-    <url>/posts/717d6ba8.html</url>
-    <content><![CDATA[<p>Stm32G431RBT6 没有时钟复用功能,     使用复用功能时， 使用GPIOx_AFRL 与 GPIOx_AFRH 寄存器 来配置复用端口。</p>
-<p>复用选择表参考芯片手册的4.11 Alternate functions表.</p>
-<p>在定时器输入模式时，IO模式设置为复用推挽。</p>
-<p>复用功能表个例：</p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212104696.png?imageSlim" alt="image-20231221210412633"></p>
-]]></content>
-      <categories>
-        <category>Stm32学习笔记</category>
-      </categories>
-      <tags>
-        <tag>Stm32</tag>
-        <tag>Stm32G4</tag>
+        <tag>1234</tag>
       </tags>
   </entry>
   <entry>
@@ -190,6 +161,23 @@
       <tags>
         <tag>Stm32</tag>
         <tag>Stm32F1</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>基于G4的GPIO复用</title>
+    <url>/posts/717d6ba8.html</url>
+    <content><![CDATA[<p>Stm32G431RBT6 没有时钟复用功能,     使用复用功能时， 使用GPIOx_AFRL 与 GPIOx_AFRH 寄存器 来配置复用端口。</p>
+<p>复用选择表参考芯片手册的4.11 Alternate functions表.</p>
+<p>在定时器输入模式时，IO模式设置为复用推挽。</p>
+<p>复用功能表个例：</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212104696.png?imageSlim" alt="image-20231221210412633"></p>
+]]></content>
+      <categories>
+        <category>Stm32学习笔记</category>
+      </categories>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Stm32G4</tag>
       </tags>
   </entry>
   <entry>

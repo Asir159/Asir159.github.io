@@ -295,8 +295,8 @@ a.post-meta__tags::before {
     background: var(--icat-card-bg);
     margin: 0.5em 0.5em;
     border-radius: 12px;
-    -webkit-backface-visibility: hidden;
-    -webkit-transform-style: preserve-3d;
+/*    -webkit-backface-visibility: hidden; */
+/*    -webkit-transform-style: preserve-3d; */
     border: var(--style-border-always);
     box-shadow: var(--icat-shadow-border);
     align-items: center;
@@ -352,8 +352,8 @@ a.post-meta__tags::before {
     /* background: var(--icat-card-bg); */
     margin: 0.5em 0.5em;
     border-radius: 12px;
-    -webkit-backface-visibility: hidden;
-    -webkit-transform-style: preserve-3d;
+/*    -webkit-backface-visibility: hidden; */
+/*    -webkit-transform-style: preserve-3d; */
     border: var(--style-border-always);
     box-shadow: var(--icat-shadow-border);
     align-items: center;

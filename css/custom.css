@@ -2,7 +2,7 @@
 
 :root {
     --trans-light: rgba(255, 255, 255, 0.75);
-    --trans-dark: rgba(78, 76, 76, 0.75);
+    --trans-dark: rgba(20, 20, 20, 0.75);
     --border-style: 1px solid rgb(169, 169, 169);
     --backdrop-filter: blur(5px) saturate(150%);
   }
@@ -50,7 +50,12 @@
   }
   
   [data-theme="dark"] #page-header.nav-fixed #nav {
-    background: rgba(0, 0, 0, 0.85) !important;
+    background: rgba(54, 54, 54, 0.9) !important;
+  }
+
+  [data-theme='dark'] #page-header.nav-fixed > #nav, 
+  [data-theme='dark'] #page-header.not-top-img > #nav {
+    background: rgba(54, 54, 54, 0.9) !important;
   }
   
   /* 夜间模式遮罩 */
