@@ -1,8 +1,8 @@
 @import "//at.alicdn.com/t/c/font_4377970_33mimatep3t.css";
 
 :root {
-    --trans-light: rgba(255, 255, 255, 0.75);
-    --trans-dark: rgba(20, 20, 20, 0.75);
+    --trans-light: rgba(255, 255, 255, 0.85);
+    --trans-dark: rgba(20, 20, 20, 0.85);
     --border-style: 1px solid rgb(169, 169, 169);
     --backdrop-filter: blur(5px) saturate(150%);
   }
@@ -187,3 +187,9 @@ h6::before {
   animation: ccc 6s linear infinite;
 }
 /****************************************/
+
+/* 翻页按钮居中 */
+#pagination {
+    width: 100%;
+    margin: auto;
+}

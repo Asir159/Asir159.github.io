@@ -248,7 +248,7 @@
   #page-name {
     position: relative;
     padding: 10px 30px;
-/*    -webkit-animation-timing-function: ease-out; */
+    -webkit-animation-timing-function: ease-out;
   }
   
   center#name-container {

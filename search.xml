@@ -1,75 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>ADC</title>
-    <url>/posts/f5d9a4ce.html</url>
-    <content><![CDATA[<h1>ADC框图</h1>
-<h2 id="ADC时钟">ADC时钟</h2>
-<h3 id="时钟设置">时钟设置</h3>
-<mark class="hl-label red">G431RB的ADC采样频率最大为60MHz,ADC挂在在APB2总线上频率为80Mhz,需在ADCx_CCR里的PRESC[3:0]设置分频系数2,分频后ADC采样为30MHz</mark>  
-<h3 id="mark-ADC的转换时间计算-mark"><mark><strong>ADC的转换时间计算</strong><mark></h3>
-<mark class="hl-label red">T_conversion=采样时间+分率时钟周期</mark> 
-<p><strong>分辨率时钟周期表</strong></p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212051583.png?imageSlim" alt="image-20231221205139945"></p>
-<p><strong>采样时间系数表</strong></p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212052423.png?imageSlim" alt="image-20231221205207448"></p>
-<h2 id="规则组和注入组执行优先级对比">规则组和注入组执行优先级对比</h2>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212052382.png?imageSlim" alt="image-20231221205253930"></p>
-<h2 id="转换序列">转换序列</h2>
-<h3 id="常规序列">常规序列</h3>
-<p>常规序列转换由SQR1~SQR4里的SQ1[0:5]位~16[0:5]位按循序进行转换,通道可取值为0~18，最后需设置转换通道的个数,<br>
-该寄存器为SQR1的L[3:0]最大为16,则为全部的通道转换</p>
-<h3 id="注入序列">注入序列</h3>
-<p>注入序列的转换循序是从JSQR里的JSQx[4:0] (x = 4 - JL[1:0])开始转换,比如只有一个注入通道转换时则从JSQ3开始(x = 4 - 1),以此类推。通道可取值为0~18，最后需设置转换通道的个数,该寄存器为JL[1:0]最大为3,对应4个转换个数</p>
-<h2 id="触发源">触发源</h2>
-<h3 id="外部触发使用方法">外部触发使用方法</h3>
-<h4 id="常规组">常规组</h4>
-<p>软件触发:由ADC_CFGR寄存器里的EXTEN[1:0] = 0,选择软件触发，在使能ADC_CR寄存器的ADSTART位开始进行转换<br>
-硬件触发:由ADC_CFGR寄存器里的EXTEN[1:0] = 其他 , 选择触发极性, 在EXSEL[4:0]中选择事件触发并开始转换.<br>
-<strong>常规组外部触发事件表：</strong></p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212057162.png?imageSlim" alt="image-20231221205744251"></p>
-<h4 id="注入组">注入组</h4>
-<p>软件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 0和ADC_CFGR寄存器中的JQDIS = 1,选择软件触发，在使能ADC_CR寄存器的JADSTART位开始进行转换<br>
-硬件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 其他 ,选择触发极性, 在JEXSEL[4:0]中选择事件触发并开始转换.</p>
-<p><strong>注入组外部触发事件表：</strong></p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212058453.png?imageSlim" alt="image-20231221205812384"></p>
-]]></content>
-      <categories>
-        <category>Stm32学习笔记</category>
-      </categories>
-      <tags>
-        <tag>Stm32</tag>
-        <tag>Stm32G4</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Hello World</title>
-    <url>/posts/4a17b156.html</url>
-    <content><![CDATA[<p>Welcome to <a href="https://hexo.io/">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues">GitHub</a>.</p>
-<h2 id="Quick-Start">Quick Start</h2>
-<h3 id="Create-a-new-post">Create a new post</h3>
-<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo new <span class="string">&quot;My New Post&quot;</span></span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html">Writing</a></p>
-<h3 id="Run-server">Run server</h3>
-<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html">Server</a></p>
-<h3 id="Generate-static-files">Generate static files</h3>
-<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html">Generating</a></p>
-<h3 id="Deploy-to-remote-sites">Deploy to remote sites</h3>
-<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html">Deployment</a></p>
-]]></content>
-      <categories>
-        <category>学习笔记</category>
-      </categories>
-      <tags>
-        <tag>测试1</tag>
-        <tag>Hexo</tag>
-        <tag>1234</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>你好</title>
     <url>/posts/784dd132.html</url>
     <content><![CDATA[<p><i class="iconfont icon-test-copy"></i><br>
@@ -141,8 +72,77 @@
 <hr>
 ]]></content>
       <tags>
-        <tag>Hexo</tag>
         <tag>测试</tag>
+        <tag>Hexo</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>ADC</title>
+    <url>/posts/f5d9a4ce.html</url>
+    <content><![CDATA[<h1>ADC框图</h1>
+<h2 id="ADC时钟">ADC时钟</h2>
+<h3 id="时钟设置">时钟设置</h3>
+<mark class="hl-label red">G431RB的ADC采样频率最大为60MHz,ADC挂在在APB2总线上频率为80Mhz,需在ADCx_CCR里的PRESC[3:0]设置分频系数2,分频后ADC采样为30MHz</mark>  
+<h3 id="mark-ADC的转换时间计算-mark"><mark><strong>ADC的转换时间计算</strong><mark></h3>
+<mark class="hl-label red">T_conversion=采样时间+分率时钟周期</mark> 
+<p><strong>分辨率时钟周期表</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212051583.png?imageSlim" alt="image-20231221205139945"></p>
+<p><strong>采样时间系数表</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212052423.png?imageSlim" alt="image-20231221205207448"></p>
+<h2 id="规则组和注入组执行优先级对比">规则组和注入组执行优先级对比</h2>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212052382.png?imageSlim" alt="image-20231221205253930"></p>
+<h2 id="转换序列">转换序列</h2>
+<h3 id="常规序列">常规序列</h3>
+<p>常规序列转换由SQR1~SQR4里的SQ1[0:5]位~16[0:5]位按循序进行转换,通道可取值为0~18，最后需设置转换通道的个数,<br>
+该寄存器为SQR1的L[3:0]最大为16,则为全部的通道转换</p>
+<h3 id="注入序列">注入序列</h3>
+<p>注入序列的转换循序是从JSQR里的JSQx[4:0] (x = 4 - JL[1:0])开始转换,比如只有一个注入通道转换时则从JSQ3开始(x = 4 - 1),以此类推。通道可取值为0~18，最后需设置转换通道的个数,该寄存器为JL[1:0]最大为3,对应4个转换个数</p>
+<h2 id="触发源">触发源</h2>
+<h3 id="外部触发使用方法">外部触发使用方法</h3>
+<h4 id="常规组">常规组</h4>
+<p>软件触发:由ADC_CFGR寄存器里的EXTEN[1:0] = 0,选择软件触发，在使能ADC_CR寄存器的ADSTART位开始进行转换<br>
+硬件触发:由ADC_CFGR寄存器里的EXTEN[1:0] = 其他 , 选择触发极性, 在EXSEL[4:0]中选择事件触发并开始转换.<br>
+<strong>常规组外部触发事件表：</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212057162.png?imageSlim" alt="image-20231221205744251"></p>
+<h4 id="注入组">注入组</h4>
+<p>软件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 0和ADC_CFGR寄存器中的JQDIS = 1,选择软件触发，在使能ADC_CR寄存器的JADSTART位开始进行转换<br>
+硬件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 其他 ,选择触发极性, 在JEXSEL[4:0]中选择事件触发并开始转换.</p>
+<p><strong>注入组外部触发事件表：</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212058453.png?imageSlim" alt="image-20231221205812384"></p>
+]]></content>
+      <categories>
+        <category>Stm32学习笔记</category>
+      </categories>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Stm32G4</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Hello World</title>
+    <url>/posts/4a17b156.html</url>
+    <content><![CDATA[<p>Welcome to <a href="https://hexo.io/">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues">GitHub</a>.</p>
+<h2 id="Quick-Start">Quick Start</h2>
+<h3 id="Create-a-new-post">Create a new post</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo new <span class="string">&quot;My New Post&quot;</span></span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/writing.html">Writing</a></p>
+<h3 id="Run-server">Run server</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/server.html">Server</a></p>
+<h3 id="Generate-static-files">Generate static files</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/generating.html">Generating</a></p>
+<h3 id="Deploy-to-remote-sites">Deploy to remote sites</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html">Deployment</a></p>
+]]></content>
+      <categories>
+        <category>学习笔记</category>
+      </categories>
+      <tags>
+        <tag>Hexo</tag>
+        <tag>测试1</tag>
+        <tag>1234</tag>
       </tags>
   </entry>
   <entry>
@@ -275,6 +275,18 @@ U_n &amp;= IR_n \\
       </tags>
   </entry>
   <entry>
+    <title>测试</title>
+    <url>/posts/9daba997.html</url>
+    <content><![CDATA[<h1>版本测试</h1>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312201759659.png?imageSlim" alt="image-20231220175902986"></p>
+]]></content>
+      <tags>
+        <tag>测试</tag>
+        <tag>Hexo</tag>
+        <tag>1234</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>独立看门狗(IWGD)与窗口看门狗(WWGD)</title>
     <url>/posts/b7171331.html</url>
     <content><![CDATA[<h1>独立看门狗</h1>
@@ -296,18 +308,6 @@ U_n &amp;= IR_n \\
       <tags>
         <tag>Stm32</tag>
         <tag>Stm32F1</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>测试</title>
-    <url>/posts/9daba997.html</url>
-    <content><![CDATA[<h1>版本测试</h1>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312201759659.png?imageSlim" alt="image-20231220175902986"></p>
-]]></content>
-      <tags>
-        <tag>Hexo</tag>
-        <tag>1234</tag>
-        <tag>测试</tag>
       </tags>
   </entry>
 </search>
