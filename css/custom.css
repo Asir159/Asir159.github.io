@@ -43,6 +43,10 @@
     border-radius: 20px;
   }
   
+  #nav.show{
+    background: rgba(255, 255, 255, 0.75);
+  }
+
   /* 导航栏 */
   #page-header.nav-fixed #nav {
     background: rgba(255, 255, 255, 0.75);
@@ -52,6 +56,11 @@
   [data-theme="dark"] #page-header.nav-fixed #nav {
     background: rgba(54, 54, 54, 0.9) !important;
   }
+
+  [data-theme='dark'] #nav.show{
+    background: rgba(54, 54, 54, 0.9);
+  }
+
 
   [data-theme='dark'] #page-header.nav-fixed > #nav, 
   [data-theme='dark'] #page-header.not-top-img > #nav {
