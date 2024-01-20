@@ -43,6 +43,17 @@
       </tags>
   </entry>
   <entry>
+    <title>FreeRTOS任务切换</title>
+    <url>/posts/60dd2490.html</url>
+    <content><![CDATA[<h1>FreeRTOS任务切换</h1>
+<p>在典型的 RTOS 中，任务的处理时间被分为多个时间片， OS 内核的执行可以有两种触发方式，一种是通过在应用任务中通过 SVC 指令触发，例如在应用任务在等待某个时间发生而需要停止的时候，那么就可以通过 SVC 指令来触发 OS内核的执行，以切换到其他任务；第二种方式是， SysTick 周期性的中断，来触发 OS 内核的执行。</p>
+<h1>PendSV 中断服务函数</h1>
+<p>FreeRTOS 在 PendSV 的中断中，完成任务切换， PendSV 的中断服务函数由 FreeRTOS 编写，将 PendSV 的中断服务函数定义成函数 <code>xPortPendSVHandler()</code>。</p>
+<p>针对 ARM Cortex-M3 内核的函数 xPortPendSVHandler()，具体的代码如下所示：</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line">__asm <span class="type">void</span> <span class="title function_">xPortPendSVHandler</span><span class="params">( <span class="type">void</span> )</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">extern</span> uxCriticalNesting;</span><br><span class="line">    <span class="keyword">extern</span> pxCurrentTCB;</span><br><span class="line">    <span class="keyword">extern</span> vTaskSwitchContext;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* 8 字节对齐 */</span></span><br><span class="line">    PRESERVE8</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* 将PSP里的地址赋给R0 */</span>    </span><br><span class="line">    mrs r0, psp</span><br><span class="line">    isb			<span class="comment">/* 指令同步 */</span></span><br><span class="line">	</span><br><span class="line">    <span class="comment">/* R3 为 pxCurrentTCB 的地址值，即指向当前运行任务控制块的指针 */</span></span><br><span class="line">	<span class="comment">/* R2 为 pxCurrentTCB 的值，即当前运行任务控制块的首地址 */</span></span><br><span class="line">    ldr r3, =pxCurrentTCB</span><br><span class="line">    ldr r2, [ r3 ]</span><br><span class="line">	</span><br><span class="line">    <span class="comment">/* 将 R4~R11 入栈到当前运行任务的任务栈中 */</span></span><br><span class="line">    stmdb r0 !, &#123; r4 - r11 &#125; <span class="comment">/* Save the remaining registers. */</span></span><br><span class="line">    <span class="comment">/* R2 指向的地址为此时的任务栈指针(指向压栈后的地址) */</span></span><br><span class="line">    str r0, [ r2 ] <span class="comment">/* Save the new top of stack into the first member of the TCB. */</span></span><br><span class="line">	</span><br><span class="line">    <span class="comment">/* 将 R3的地址值，即指向当前运行任务控制块的指针、 </span></span><br><span class="line"><span class="comment">     * R14异常结束返回的时的地址( PC 指向的代码位置运行) </span></span><br><span class="line"><span class="comment">     * 入栈到 MSP 指向的栈中 </span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    stmdb sp !, &#123; r3, r14 &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">/* 屏蔽受 FreeRTOS 管理的所有中断 */</span></span><br><span class="line">    mov r0, #configMAX_SYSCALL_INTERRUPT_PRIORITY</span><br><span class="line">    msr basepri, r0</span><br><span class="line">    dsb</span><br><span class="line">    isb</span><br><span class="line">        </span><br><span class="line">    <span class="comment">/* 跳转到函数 vTaskSeitchContext</span></span><br><span class="line"><span class="comment">    * 主要用于更新 pxCurrentTCB，</span></span><br><span class="line"><span class="comment">    * 使其指向最高优先级的就绪态任务</span></span><br><span class="line"><span class="comment">    */</span>    </span><br><span class="line">    bl vTaskSwitchContext</span><br><span class="line">    <span class="comment">/* 使能所有中断 */</span></span><br><span class="line">    mov r0, #<span class="number">0</span></span><br><span class="line">    msr basepri, r0</span><br><span class="line">    <span class="comment">/* 将 R3、 R14 重新从 MSP 指向的栈中出栈 */</span></span><br><span class="line">    ldmia sp !, &#123; r3, r14 &#125;</span><br><span class="line">	</span><br><span class="line">    <span class="comment">/* 注意： R3 为 pxCurrentTCB 的地址值，</span></span><br><span class="line"><span class="comment">    * pxCurrentTCB 已经在函数 vTaskSwitchContext 中更新为最高优先级的就绪态任务</span></span><br><span class="line"><span class="comment">    * 因此 R1 为 pxCurrentTCB 的值，即当前最高优先级就绪态任务控制块的首地址 </span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">    ldr r1, [ r3 ]</span><br><span class="line">    <span class="comment">/* R0 为最高优先级就绪态任务的任务栈指针 */</span></span><br><span class="line">    ldr r0, [ r1 ] <span class="comment">/* The first item in pxCurrentTCB is the task top of stack. */</span></span><br><span class="line">    <span class="comment">/* 将之前保存的值,重新赋值回任务栈中 */</span></span><br><span class="line">    ldmia r0 !, &#123; r4 - r11 &#125; <span class="comment">/* Pop the registers and the critical nesting count. */</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">/* 更新 PSP 为任务切换后的任务栈指针 */</span></span><br><span class="line">    msr psp, r0</span><br><span class="line">    isb</span><br><span class="line">    <span class="comment">/* 跳转到切换后的任务运行</span></span><br><span class="line"><span class="comment">    * 执行此指令， CPU 会自动从 PSP 指向的任务栈中，</span></span><br><span class="line"><span class="comment">    * 出栈 R0、 R1、 R2、 R3、 R12、 LR、 PC、 xPSR 寄存器，</span></span><br><span class="line"><span class="comment">    * 接着 CPU 就跳转到 PC 指向的代码位置运行，</span></span><br><span class="line"><span class="comment">    * 也就是任务上次切换时运行到的位置</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">    bx r14</span><br><span class="line">    nop</span><br><span class="line"><span class="comment">/* *INDENT-ON* */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+]]></content>
+  </entry>
+  <entry>
     <title>Freertos的移植</title>
     <url>/posts/416b4ca0.html</url>
     <content><![CDATA[<h1>FreeRtos的移植</h1>
@@ -255,6 +266,73 @@ F7和H7选择 ARM_CM7/r0p1</p>
       </tags>
   </entry>
   <entry>
+    <title>FreeRTOS启动任务调度的过程</title>
+    <url>/posts/7324a7fe.html</url>
+    <content><![CDATA[<h1>FreeRTOS开启任务调度器</h1>
+<h2 id="函数vTaskStartScheduler">函数<code>vTaskStartScheduler()</code></h2>
+<p>在FreeRTOS中使用该函数用于启动任务调度器，FreeRTOS会开始进行任务调度。</p>
+<p><code>VTaskStartScheduler()</code>代码简约如下如下</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line">    BaseType_t xReturn;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Add the idle task at the lowest priority. */</span></span><br><span class="line">	<span class="comment">/* 创建空闲任务,如果使用静态内存管理，有先使用静态方法创建 */</span></span><br><span class="line">    <span class="meta">#<span class="keyword">if</span> ( configSUPPORT_STATIC_ALLOCATION == 1 )</span></span><br><span class="line">    &#123;</span><br><span class="line">        StaticTask_t * pxIdleTaskTCBBuffer = <span class="literal">NULL</span>;</span><br><span class="line">        StackType_t * pxIdleTaskStackBuffer = <span class="literal">NULL</span>;</span><br><span class="line">        <span class="type">uint32_t</span> ulIdleTaskStackSize;</span><br><span class="line"></span><br><span class="line">        vApplicationGetIdleTaskMemory( &amp;pxIdleTaskTCBBuffer, &amp;pxIdleTaskStackBuffer, &amp;ulIdleTaskStackSize );</span><br><span class="line">        xIdleTaskHandle = xTaskCreateStatic( prvIdleTask,</span><br><span class="line">                                             configIDLE_TASK_NAME,</span><br><span class="line">                                             ulIdleTaskStackSize,</span><br><span class="line">                                             ( <span class="type">void</span> * ) <span class="literal">NULL</span>,</span><br><span class="line">                                             portPRIVILEGE_BIT,    </span><br><span class="line">                                             pxIdleTaskStackBuffer,</span><br><span class="line">                                             pxIdleTaskTCBBuffer ); </span><br><span class="line">        <span class="keyword">if</span>( xIdleTaskHandle != <span class="literal">NULL</span> )</span><br><span class="line">        &#123;</span><br><span class="line">            xReturn = pdPASS;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">        &#123;</span><br><span class="line">            xReturn = pdFAIL;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">#<span class="keyword">else</span><span class="comment">/* 使用动态创建内存 */</span></span></span><br><span class="line">    &#123;</span><br><span class="line">        xReturn = xTaskCreate( prvIdleTask,</span><br><span class="line">                               configIDLE_TASK_NAME,</span><br><span class="line">                               configMINIMAL_STACK_SIZE,</span><br><span class="line">                               ( <span class="type">void</span> * ) <span class="literal">NULL</span>,</span><br><span class="line">                               portPRIVILEGE_BIT,  </span><br><span class="line">                               &amp;xIdleTaskHandle ); </span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">	<span class="comment">/* 如果启用软件定时器，则需要创建定时器服务任务 */</span></span><br><span class="line">    <span class="meta">#<span class="keyword">if</span> ( configUSE_TIMERS == 1 )</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span>( xReturn == pdPASS )</span><br><span class="line">        &#123;</span><br><span class="line">            xReturn = xTimerCreateTimerTask();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">        &#123;</span><br><span class="line">            mtCOVERAGE_TEST_MARKER();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">#<span class="keyword">endif</span> <span class="comment">/* configUSE_TIMERS */</span></span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span>( xReturn == pdPASS )</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">/* 自主添加代码，需要时用到，目前不必理会 */</span></span><br><span class="line">        <span class="meta">#<span class="keyword">ifdef</span> FREERTOS_TASKS_C_ADDITIONS_INIT</span></span><br><span class="line">        &#123;</span><br><span class="line">            freertos_tasks_c_additions_init();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* FreeRTOS 关闭中断，</span></span><br><span class="line"><span class="comment">        * 以保证在开启任务任务调度器之前或过程中， SysTick 不会产生中断，</span></span><br><span class="line"><span class="comment">        * 在第一个任务开始运行时，会重新打开中断。</span></span><br><span class="line"><span class="comment">        */</span></span><br><span class="line">        portDISABLE_INTERRUPTS();</span><br><span class="line"></span><br><span class="line">        <span class="meta">#<span class="keyword">if</span> ( ( configUSE_NEWLIB_REENTRANT == 1 ) || ( configUSE_C_RUNTIME_TLS_SUPPORT == 1 ) )</span></span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">/* Switch C-Runtime&#x27;s TLS Block to point to the TLS</span></span><br><span class="line"><span class="comment">             * block specific to the task that will run first. */</span></span><br><span class="line">            configSET_TLS_BLOCK( pxCurrentTCB-&gt;xTLSBlock );</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        </span><br><span class="line">		<span class="comment">/* 初始化一些全局变量</span></span><br><span class="line"><span class="comment">        * xNextTaskUnblockTime: 下一个距离取消任务阻塞的时间，初始化为最大值</span></span><br><span class="line"><span class="comment">        * xSchedulerRunning: 任务调度器运行标志，设为已运行</span></span><br><span class="line"><span class="comment">        * xTickCount: 系统使用节拍计数器，宏 configINITIAL_TICK_COUNT 默认为 0</span></span><br><span class="line"><span class="comment">        */</span></span><br><span class="line">        xNextTaskUnblockTime = portMAX_DELAY;</span><br><span class="line">        xSchedulerRunning = pdTRUE;</span><br><span class="line">        xTickCount = ( TickType_t ) configINITIAL_TICK_COUNT;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 系统运行时间统计 */</span></span><br><span class="line">        portCONFIGURE_TIMER_FOR_RUN_TIME_STATS();</span><br><span class="line">		</span><br><span class="line">        <span class="comment">/* 调试使用 */</span></span><br><span class="line">        traceTASK_SWITCHED_IN();</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 设置用于系统时钟节拍的硬件定时器（SysTick）</span></span><br><span class="line"><span class="comment">         * 会在这个函数中进入第一个任务，并开始任务调度</span></span><br><span class="line"><span class="comment">         * 任务调度开启后，便不会再返回</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        xPortStartScheduler();</span><br><span class="line"></span><br><span class="line">       <span class="comment">/* 在大多数情况下，xPortStartScheduler()不会返回。如果它返回pdTRUE，</span></span><br><span class="line"><span class="comment">        * 则没有足够的堆内存可用来创建Idle或Timer任务。如果返回pdFALSE，</span></span><br><span class="line"><span class="comment">        * 则应用程序调用xTaskEndScheduler()。大多数端口不实现xTaskEndScheduler()，因为没有什么可返回的。		*/</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">/* 动态方式创建空闲任务和定时器服务任务（如果有）时，因分配给 FreeRTOS 的堆空间</span></span><br><span class="line"><span class="comment">		* 不足，导致任务无法成功创建 */</span></span><br><span class="line">        configASSERT( xReturn != errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY );</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* 防止编译器警告，不用理会 */</span></span><br><span class="line">    <span class="comment">/* Prevent compiler warnings if INCLUDE_xTaskGetIdleTaskHandle is set to 0,</span></span><br><span class="line"><span class="comment">     * meaning xIdleTaskHandle is not used anywhere else. */</span></span><br><span class="line">    ( <span class="type">void</span> ) xIdleTaskHandle;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* 调试使用，不用理会 */</span></span><br><span class="line">    <span class="comment">/* OpenOCD makes use of uxTopUsedPriority for thread debugging. Prevent uxTopUsedPriority</span></span><br><span class="line"><span class="comment">     * from getting optimized out as it is no longer used by the kernel. */</span></span><br><span class="line">    ( <span class="type">void</span> ) uxTopUsedPriority;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>从上面的代码可以看出，函数 vTaskStartScheduler()主要做了六件事情。</p>
+<ul>
+<li>创建空闲任务，根据是否支持静态内存管理，使用静态方式或动态方式创建空闲任务。</li>
+<li>创建定时器服务任务，创建定时器服务任务需要配置启用软件定时器，创建定时器服务<br>
+任务，同样是根据是否配置支持静态内存管理，使用静态或动态方式创建定时器服务任务。</li>
+<li>关闭中断，使用 portDISABLE_INTERRUPT()关闭中断，这种方式只关闭受 FreeRTOS 管<br>
+理的中断。关闭中断主要是为了防止 SysTick 中断在任务调度器开启之前或过程中，产生中断。<br>
+FreeRTOS 会在开始运行第一个任务时，重新打开中断。</li>
+<li>初始化一些全局变量，并将任务调度器的运行标志设置为已运行。</li>
+<li>初始化任务运行时间统计功能的时基定时器，任务运行时间统计功能需要一个硬件定时<br>
+器提供高精度的计数，这个硬件定时器就在这里进行配置，如果配置不启用任务运行时间统计<br>
+功能的，就无需进行这项硬件定时器的配置。</li>
+<li>最后就是调用函数 xPortStartScheduler()。</li>
+</ul>
+<h2 id="函数-xPortStartScheduler">函数 <code>xPortStartScheduler() </code></h2>
+<p>函数 xPortStartScheduler()完成启动任务调度器中与硬件架构相关的配置部分，以及启动第<br>
+一个任务，具体的代码如下所示：</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line">BaseType_t <span class="title function_">xPortStartScheduler</span><span class="params">( <span class="type">void</span> )</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="meta">#<span class="keyword">if</span> ( configASSERT_DEFINED == 1 )</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">/* 检测用户在 FreeRTOSConfig.h 文件中对中断相关部分的配置是否有误，代码省略 */</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">    <span class="comment">/* 设置 PendSV 和 SysTick 的中断优先级为最低优先级 */</span></span><br><span class="line">    portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;</span><br><span class="line"></span><br><span class="line">    portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* 配置 SysTick</span></span><br><span class="line"><span class="comment">    * 清空 SysTick 的计数值</span></span><br><span class="line"><span class="comment">    * 根据 configTICK_RATE_HZ 配置 SysTick 的重装载值</span></span><br><span class="line"><span class="comment">    * 开启 SysTick 计数和中断</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">    vPortSetupTimerInterrupt();</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Initialise the critical nesting count ready for the first task. */</span></span><br><span class="line">    <span class="comment">/* 初始化临界区嵌套次数计数器为 0 */</span></span><br><span class="line">    uxCriticalNesting = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Start the first task. */</span></span><br><span class="line">    prvStartFirstTask();</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Should not get here! */</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>函数<code>xPortStartScheduler() </code>的解析:</p>
+<ul>
+<li>在启用断言的情况下， 函数 xPortStartScheduler()会检测用户在 FreeRTOSConfig.h 文件<br>
+中对中断的相关配置是否有误。省略的部分。</li>
+<li>配置 PendSV 和 SysTick 的中断优先级为最低优先级。</li>
+<li>调用函数 vPortSetupTimerInterrupt()配置 SysTick ，首先，会将当前的计算值清空，根据configSYSTICK_CLOCK_HZ（SysTick 时钟源频率）和configTICK_RATE_HZ（系统时钟节拍频率，及任务切换） 计算并设置 SysTick 的重装载值，然后启动 SysTick 计数和中断。</li>
+<li>初始化临界区嵌套计数器为 0。</li>
+<li>调用函数 <code>prvStartFirstTask()</code>启动第一个任务。</li>
+</ul>
+<h1>FreeRTOS 启动第一个任务</h1>
+<h2 id="函数-prvStartFirstTask">函数 <code>prvStartFirstTask()</code></h2>
+<p>函数 <code>prvStartFirstTask()</code>用于初始化启动第一个任务前的环境，主要是重新设置 MSP 指针，并使能全局中断，具体的代码如下所示</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line">__asm <span class="type">void</span> <span class="title function_">prvStartFirstTask</span><span class="params">( <span class="type">void</span> )</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">/* 8 字节对齐 */</span></span><br><span class="line">    PRESERVE8</span><br><span class="line">    ldr r0, =<span class="number">0xE000ED08</span> <span class="comment">/* 0xE000ED08 为 VTOR(中断向量表第一位) 地址 */</span></span><br><span class="line">        				<span class="comment">/* VTOR第一位存放MSP的地址 */</span></span><br><span class="line">    ldr r0, [ r0 ] <span class="comment">/* 获取 VTOR 第一位(MSP)的地址 */</span></span><br><span class="line">    ldr r0, [ r0 ] <span class="comment">/* 获取 MSP 的初始值 */</span></span><br><span class="line">    <span class="comment">/* 初始化 MSP */</span></span><br><span class="line">    msr msp, r0</span><br><span class="line">    <span class="comment">/* 使能全局中断 */</span></span><br><span class="line">    cpsie i</span><br><span class="line">    cpsie f</span><br><span class="line">    dsb</span><br><span class="line">    isb</span><br><span class="line">    <span class="comment">/* 调用 SVC中断 启动第一个任务 */</span></span><br><span class="line">    svc <span class="number">0</span></span><br><span class="line">    nop</span><br><span class="line">    nop</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>函数 <code>prvStartFirstTask()</code>是一段汇编代码，解析如下所示：</p>
+<ul>
+<li>首先是使用了 PRESERVE8，进行 8 字节对齐，这是因为，栈在任何时候都是需要 4 字节对齐的，而在调用入口得 8 字节对齐，在进行 C 编程的时候，编译器会自动完成的对齐的操作，而对于汇编，就需要开发者手动进行对齐。</li>
+<li>接下来的三行代码是为了获得 MSP 指针的初始值</li>
+<li>在获取了栈顶指针后，将 MSP 指针重新赋值为栈底指针。这个操作相当于丢弃了程序之前保存在栈中的数据，因为FreeRTOS从开启任务调度器到启动第一个任务都是不会返回的，是一条不归路，因此将栈中的数据丢弃，也不会有影响。</li>
+<li>重新赋值 MSP 后，接下来就重新使能全局中断，因为之前在函数 vTaskStartScheduler()中关闭了受 FreeRTOS 的中断。</li>
+<li>最后使用 SVC 指令，并传入系统调用号 0，触发 SVC 中断</li>
+</ul>
+<h2 id="函数vPortSVCHandler">函数<code>vPortSVCHandler()</code></h2>
+<p>当使能了全局中断，并且手动触发 SVC 中断后，就会进入到 SVC 的中断服务函数中。 SVC的中断服务函数为 <code>vPortSVCHandler()</code>，该函数在 <code>port.c</code>文件中有定义。</p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line">__asm <span class="type">void</span> <span class="title function_">vPortSVCHandler</span><span class="params">( <span class="type">void</span> )</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">/* 8 字节对齐 */</span></span><br><span class="line">    PRESERVE8</span><br><span class="line">        <span class="comment">/* 获取任务栈地址 */</span></span><br><span class="line">        ldr r3, = pxCurrentTCB <span class="comment">/* r3 指向优先级最高的就绪态任务的任务控制块的地址 */</span></span><br><span class="line">        ldr r1, [ r3 ] <span class="comment">/* r1 取任务控制块地址的值(*pxCurrentTCB) */</span></span><br><span class="line">        ldr r0, [ r1 ] <span class="comment">/* r0 为任务控制块的第一个元素（栈顶） */</span></span><br><span class="line">        <span class="comment">/* 模拟出栈，并设置 PSP */</span></span><br><span class="line">        ldmia r0 !, &#123; r4 - r11 &#125; <span class="comment">/* 任务栈弹出到 CPU 寄存器 */</span></span><br><span class="line">    msr psp, r0 <span class="comment">/* 设置 PSP 为任务栈指针 */</span></span><br><span class="line">        isb</span><br><span class="line">        <span class="comment">/* 使能所有中断 */</span></span><br><span class="line">        mov r0, # <span class="number">0</span></span><br><span class="line">        msr basepri,</span><br><span class="line">    <span class="comment">/* 使用 PSP 指针，并跳转到任务函数 */</span></span><br><span class="line">    orr r14, # <span class="number">0xd</span></span><br><span class="line">        bx r14</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>从上面代码中可以看出，函数 <code>vPortSVCHandler()</code>就是用来跳转到第一个任务函数中去的，<br>
+该函数的具体解析如下:</p>
+<ul>
+<li>首先通过 pxCurrentTCB 获取优先级最高的就绪态任务的任务栈地址，优先级最高的就绪态任务就是系统将要运行的任务。</li>
+<li>接下来通过任务的栈顶指针，将任务栈中的内容出栈到 CPU 寄存器中，任务栈中的内容在调用任务创建函数的时候，已经初始化了。然后再设置 PSP 指针，那么，这么一来，任务的运行环境就准备好了。</li>
+<li>通过往 BASEPRI 寄存器中写 0，允许中断。</li>
+<li>最后通过两条汇编指令，使 CPU 跳转到任务的函数中去执行</li>
+</ul>
+]]></content>
+      <categories>
+        <category>FreeRtos</category>
+      </categories>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Rtos</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>hexo的一些基本用法</title>
     <url>/posts/f2f0a2cc.html</url>
     <content><![CDATA[<p><i class="iconfont icon-test-copy"></i><br>
@@ -349,6 +427,14 @@ F7和H7选择 ARM_CM7/r0p1</p>
 <p>效果:</p>
 <hr>
 </blockquote>
+<h3 id="3、缩进-空格">3、缩进 &amp; 空格</h3>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&amp;ensp;或  //半角的空格</span><br><span class="line">&amp;emsp; \\全角空格(中文格式下用两个&amp;emsp;即可)</span><br><span class="line">&amp;nbsp;	\\不断行的空格</span><br></pre></td></tr></table></figure>
+<p>效果:</p>
+<p>    这是一个段落<br>
+  这是一个段落</p>
+<p>      这是一个段落</p>
+</blockquote>
 <h2 id="三、文字显示">三、文字显示</h2>
 <h3 id="1、字体">1、字体</h3>
 <blockquote>
@@ -391,6 +477,22 @@ F7和H7选择 ARM_CM7/r0p1</p>
 <p>效果:<br>
 x^2^<br>
 H~2~O</p>
+</blockquote>
+<h3 id="3、字体颜色">3、字体颜色</h3>
+<blockquote>
+<p>代码:</p>
+<figure class="highlight text"><table><tr><td class="code"><pre><span class="line">&gt;&lt;font face=&quot;黑体&quot;&gt;我是黑体字&lt;/font&gt;</span><br><span class="line">&gt;&lt;font face=&quot;微软雅黑&quot;&gt;我是微软雅黑&lt;/font&gt;</span><br><span class="line">&gt;&lt;font face=&quot;STCAIYUN&quot;&gt;我是华文彩云&lt;/font&gt;</span><br><span class="line">&gt;&lt;font color=red&gt;我是红色&lt;/font&gt;</span><br><span class="line">&gt;&lt;font color=#008000&gt;我是绿色&lt;/font&gt;</span><br><span class="line">&gt;&lt;font color=Blue&gt;我是蓝色&lt;/font&gt;</span><br><span class="line">&gt;&lt;font size=5&gt;我是尺寸&lt;/font&gt;</span><br><span class="line">&gt;&lt;font face=&quot;黑体&quot; color=green size=5&gt;我是黑体，绿色，尺寸为5&lt;/font&gt;</span><br></pre></td></tr></table></figure>
+</blockquote>
+<blockquote>
+<p>效果：</p>
+<p><font face="黑体">我是黑体字</font><br>
+<font face="微软雅黑">我是微软雅黑</font><br>
+<font face="STCAIYUN">我是华文彩云</font><br>
+<font color=red>我是红色</font><br>
+<font color=#008000>我是绿色</font><br>
+<font color=Blue>我是蓝色</font><br>
+<font size=5>我是尺寸</font><br>
+<font face="黑体" color=green size=5>我是黑体，绿色，尺寸为5</font></p>
 </blockquote>
 <h2 id="四、列表">四、列表</h2>
 <h3 id="1、无序列表">1、无序列表</h3>
@@ -508,13 +610,14 @@ H~2~O</p>
 <h2 id="七、链接">七、链接</h2>
 <blockquote>
 <p>代码:</p>
-<figure class="highlight text"><table><tr><td class="code"><pre><span class="line">&gt;www.baidu.com</span><br><span class="line">&gt;[百度一下](https://www.baidu.com)</span><br><span class="line">&gt;[百度一下](https://www.baidu.com &quot;https://www.baidu.com&quot;)</span><br></pre></td></tr></table></figure>
+<figure class="highlight text"><table><tr><td class="code"><pre><span class="line">&gt;www.baidu.com</span><br><span class="line">&gt;[百度一下](https://www.baidu.com)</span><br><span class="line">&gt;[百度一下](https://www.baidu.com &quot;https://www.baidu.com&quot;)</span><br><span class="line">&gt;[链接](#七、链接)</span><br></pre></td></tr></table></figure>
 </blockquote>
 <blockquote>
 <p>效果:<br>
 <a href="http://www.baidu.com">www.baidu.com</a><br>
 <a href="https://www.baidu.com">百度一下</a><br>
-<a href="https://www.baidu.com" title="https://www.baidu.com">百度一下</a></p>
+<a href="#%E6%96%87%E5%AD%97%E6%98%BE%E7%A4%BA">文本链接</a></p>
+<p><a href="#%E4%B8%83%E3%80%81%E9%93%BE%E6%8E%A5">文本链接</a></p>
 </blockquote>
 <blockquote>
 <p>快捷键:  Ctrl+K</p>
@@ -580,6 +683,30 @@ H~2~O</p>
 </blockquote>
 <blockquote>
 <p>快捷键:  Ctrl+T</p>
+</blockquote>
+<blockquote>
+<p>设置列宽（HTML渲染格式）</p>
+<table>
+<thead>
+<tr>
+<th><div style="width:290px">1</div></th>
+<th><div style="width:290px">2</div></th>
+<th><div style="width:290px">3</div></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
 </blockquote>
 <h2 id="十一、流程图">十一、流程图</h2>
 <h3 id="1、横向流程图">1、横向流程图</h3>
@@ -1658,7 +1785,7 @@ c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v3000 v585 h43z'/></svg></span></span
     <title>基于F1系列的波特率计算</title>
     <url>/posts/88addc63.html</url>
     <content><![CDATA[<h1>换算过程</h1>
-<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"><span class="comment">/*  */</span></span><br><span class="line"><span class="comment">/* Mantissa : 整数 */</span></span><br><span class="line"><span class="comment">/* Fraction : 小数 */</span></span><br><span class="line">USARTDIV = Mantissa + ( Fraction / <span class="number">16</span>)         (十进制数表示值)</span><br><span class="line">USARTDIV = Mantissa + Fraction * <span class="number">16</span>            (十六进制表示值)</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 写入UART-&gt;BRR的值为 */</span></span><br><span class="line">UART-&gt;BRR = (Mantissa &lt;&lt; <span class="number">4</span>) + (Fraction * <span class="number">16</span>) + <span class="number">0.5</span>  =           (Fraction * <span class="number">16</span> ( 十进制转<span class="number">16</span>进制) 整数&lt;&lt; <span class="number">4</span> 位存放BRR的高位)</span><br><span class="line">UART-&gt;BRR = USARTDIV * <span class="number">16</span> + <span class="number">0.5</span>                                  (加<span class="number">0.5</span> 偏移值(相当于四舍五入)) </span><br><span class="line"></span><br><span class="line"><span class="comment">/* 波特率的计算方法 */</span></span><br><span class="line"><span class="comment">/* Buad :  波特率 */</span></span><br><span class="line"><span class="comment">/* Fck :  系统时钟频率 */</span></span><br><span class="line">Buad = Fck / (<span class="number">16</span> * USARTDIV)</span><br><span class="line">USARTDIV = Fck / (<span class="number">16</span> * Buad)</span><br><span class="line"><span class="comment">/* 上式得知 */</span></span><br><span class="line">UART-&gt;BRR = Fck / (<span class="number">16</span> * Buad) * <span class="number">16</span> + <span class="number">0.5</span> = fck / Buad + <span class="number">0.5</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"><span class="comment">/*  */</span></span><br><span class="line"><span class="comment">/* Mantissa : 整数 */</span></span><br><span class="line"><span class="comment">/* Fraction : 小数 */</span></span><br><span class="line">whil</span><br><span class="line">USARTDIV = Mantissa + ( Fraction / <span class="number">16</span>)         (十进制数表示值)</span><br><span class="line">USARTDIV = Mantissa + Fraction * <span class="number">16</span>            (十六进制表示值)</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 写入UART-&gt;BRR的值为 */</span></span><br><span class="line">UART-&gt;BRR = (Mantissa &lt;&lt; <span class="number">4</span>) + (Fraction * <span class="number">16</span>) + <span class="number">0.5</span>  =           (Fraction * <span class="number">16</span> ( 十进制转<span class="number">16</span>进制) 整数&lt;&lt; <span class="number">4</span> 位存放BRR的高位)</span><br><span class="line">UART-&gt;BRR = USARTDIV * <span class="number">16</span> + <span class="number">0.5</span>                                  (加<span class="number">0.5</span> 偏移值(相当于四舍五入)) </span><br><span class="line"></span><br><span class="line"><span class="comment">/* 波特率的计算方法 */</span></span><br><span class="line"><span class="comment">/* Buad :  波特率 */</span></span><br><span class="line"><span class="comment">/* Fck :  系统时钟频率 */</span></span><br><span class="line">Buad = Fck / (<span class="number">16</span> * USARTDIV)</span><br><span class="line">USARTDIV = Fck / (<span class="number">16</span> * Buad)</span><br><span class="line"><span class="comment">/* 上式得知 */</span></span><br><span class="line">UART-&gt;BRR = Fck / (<span class="number">16</span> * Buad) * <span class="number">16</span> + <span class="number">0.5</span> = fck / Buad + <span class="number">0.5</span></span><br></pre></td></tr></table></figure>
 <h1>波特率设置公式推演</h1>
 <p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211940055.png?imageSlim" alt="image-20231221194027013"></p>
 <h2 id="BRR寄存器的值">BRR寄存器的值</h2>
@@ -1670,6 +1797,445 @@ c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v3000 v585 h43z'/></svg></span></span
       <tags>
         <tag>Stm32</tag>
         <tag>Stm32F1</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>初识Cortex-M</title>
+    <url>/posts/6c4c224e.html</url>
+    <content><![CDATA[<blockquote>
+<p>该文摘抄与Cortex-M权威指南</p>
+<p>文中名称:</p>
+<p>缺省:<strong>未经其他任何指令更改，程序或系统默认的（设置）</strong>。(default)</p>
+</blockquote>
+<h1>ARM的一些常用的汇编指令</h1>
+<table>
+<thead>
+<tr>
+<th><div style= "width:130px"> Instruction(指令)      </div></th>
+<th><div style=  "width:200px">                   Function(函数介绍)                        </div></th>
+<th><div style= "width:180px"> Example(例子)                   </div></th>
+<th>Description(解释)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MOV</td>
+<td>MOV(移动)</td>
+<td>MOV R4, R0</td>
+<td>将R0寄存器的值赋值到R4</td>
+</tr>
+<tr>
+<td>MOVS</td>
+<td>MOVS移动并更新</td>
+<td>MOVS R4, R0</td>
+<td>将R0寄存器的值赋值到R4,并更新</td>
+</tr>
+<tr>
+<td>Mov</td>
+<td></td>
+<td>Mov R3, #0x33</td>
+<td>将R3寄存器的值设置为0x33</td>
+</tr>
+<tr>
+<td>MRS</td>
+<td>Move Special Register into  General  register</td>
+<td>MRS R0,PRIMASK</td>
+<td>将PRIMASK(特殊寄存器)的值赋值给R0</td>
+</tr>
+<tr>
+<td>MSR</td>
+<td>Move General  register into Special Register</td>
+<td>MRS PRIMASK,R0</td>
+<td>将R0的值PRIMASK(特殊寄存器)</td>
+</tr>
+<tr>
+<td>LDR</td>
+<td>Load word from memory to register</td>
+<td>LDR R3, [R2, #offset]</td>
+<td>将R2地址存储的值复制给R3(相当于对C指针的解引用操作)</td>
+</tr>
+<tr>
+<td>STMDB</td>
+<td>Store Multiple Registers Decrement Before</td>
+<td>STMDB r0 !, { r4    - r11 }</td>
+<td>将R4-R11的地址依次复制给R0，R0在每赋值完一个后,地址会自动减少(!为跟新),相当于压栈操作</td>
+</tr>
+<tr>
+<td>LDMIA</td>
+<td>Load multiple increment after</td>
+<td>LDMIA R0 !, { R4 - R11 }</td>
+<td>将R4-R11的地址依次复制给R0，R0在每赋值完一个后,地址会自动增加(!为跟新),相当于出栈操作</td>
+</tr>
+<tr>
+<td>ORR</td>
+<td>Logical OR</td>
+<td>ORR R14, #0x0D</td>
+<td>将R14的地址或上0x0D</td>
+</tr>
+<tr>
+<td>DSB</td>
+<td>Data Synchronization Barrier</td>
+<td>DSB</td>
+<td>指令用于确保在它之前的所有数据访问都已经完成，然后才能继续执行该指令之后的操作。</td>
+</tr>
+<tr>
+<td><strong>ISB</strong></td>
+<td>Instruction Synchronization Barrier</td>
+<td>ISB</td>
+<td>指令用于刷新处理器流水线，并确保在它之前的所有指令已经在处理器中执行完成。这有助于确保后续指令的执行不受之前指令未完成的影响。</td>
+</tr>
+<tr>
+<td>STR</td>
+<td>Store Register</td>
+<td>STR R0, [ R2 ]</td>
+<td>将R0寄存器的地址,写入到R2寄存器指向的地址(相当于<code>C的 a(R0) = *b(R2)</code>)</td>
+</tr>
+<tr>
+<td>BX</td>
+<td>Branch and Exchange</td>
+<td>BX R14</td>
+<td>如果EXC_RETURN值仍在LR(R14)中，我们可以使用BX LR指令 执行中断返回</td>
+</tr>
+<tr>
+<td>BL</td>
+<td>Branch with Link</td>
+<td>BL Function</td>
+<td>跳转到Function函数中,同时改返回值存放在LR(R4)中</td>
+</tr>
+</tbody>
+</table>
+<h1>Cortex-M架构CPU内核寄存器(M3)</h1>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192016674.png?imageSlim" alt="image-20240119201600047"></p>
+<h2 id="R0-R12：通用寄存器-General-Purpose-Registers">R0-R12：通用寄存器  (General-Purpose Registers)</h2>
+<p>​	R0‐R12 都是 32 位通用寄存器，用于数据操作。但是注意：绝大多数 16 位 Thumb 指令只能访问 R0‐R7，而 32 位 Thumb‐2 指令可以访问所有寄存器。</p>
+<h2 id="R13：堆栈指针-Stack-Pointers">R13：堆栈指针(Stack Pointers)</h2>
+<p>Cortex-M3 包含两个堆栈指针 R13。它们被存储起来(banked)，因此只有一个可见一次：</p>
+<ul>
+<li>主堆栈指针（ MSP）：复位后缺省使用的堆栈指针，用于操作系统内核以及异常处理例程（包括中断服务例程）</li>
+<li>进程堆栈指针（ PSP）：由用户的应用程序代码使用。</li>
+</ul>
+<p><strong>堆栈指针的最低两位永远是 0，这意味着堆栈总是 4 字节对齐的。</strong></p>
+<h2 id="R14：链接指针-The-Link-Register">R14：链接指针(The Link Register)</h2>
+<p>当调用子程序时，返回地址存储在链接寄存器中。</p>
+<h2 id="R15：程序计数寄存器-The-Program-Counter">R15：程序计数寄存器 (The Program Counter)</h2>
+<p>指向当前的程序地址。如果修改它的值，就能改变程序的执行流</p>
+<h2 id="特殊功能寄存器-Special-Registers）">特殊功能寄存器(Special Registers）</h2>
+<p>Cortex‐M3 还在内核水平上搭载了若干特殊功能寄存器，包括：</p>
+<ul>
+<li>程序状态字寄存器组（ PSRs）</li>
+<li>中断屏蔽寄存器组（ PRIMASK, FAULTMASK, BASEPRI）</li>
+<li>控制寄存器（ CONTROL）</li>
+</ul>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401200136547.png?imageSlim" alt="image-20240119203226450" style="zoom:150%;" />
+<p>​	这些寄存器具有特殊功能，只能通过特殊指令访问。他们不能用于正常的数据处理。</p>
+<h3 id="程序状态寄存器-Program-Status-Registers-xPSR">程序状态寄存器(Program Status Registers (xPSR) )</h3>
+<p>程序状态寄存器在其内部又被分为三个子状态寄存器：</p>
+<ul>
+<li>
+<p>应用程序  PSR(Application PSR (APSR)  )</p>
+</li>
+<li>
+<p>中断号 PSR  (Interrupt PSR (IPSR) )</p>
+</li>
+<li>
+<p>执行 PSR  (Execution PSR (EPSR)  )</p>
+</li>
+</ul>
+<p>​	通过 MRS/MSR 指令，这 3 个 PSRs 即可以单独访问，也可以组合访问（ 2 个组合， 3 个组合都可以）。当使用三合一的方式访问时，应使用名字“xPSR”。</p>
+<p><strong>Cortex‐M3 中的程序状态寄存器</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192043561.png?imageSlim" alt="image-20240119204334606"></p>
+<p><strong>组合后的程序状态寄存器</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192045715.png?imageSlim" alt="image-20240119204500519"></p>
+<h3 id="PRIMASK-FAULTMASK-和-BASEPRI">PRIMASK, FAULTMASK 和 BASEPRI</h3>
+<p>  这三个寄存器用于控制异常的使能和除能。</p>
+<p><strong>Cortex-M3 的屏蔽寄存器组</strong></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PRIMASK</td>
+<td>这是个只有 1 个位的寄存器。当它置 1 时， 就关掉所有可屏蔽的异常，只剩下 NMI 和硬 fault 可以响应。它的缺省值是 0，表示没有关中断。</td>
+</tr>
+<tr>
+<td>FAULTMASK</td>
+<td>是个只有 1 个位的寄存器。当它置 1 时，只有 NMI 才能响应，所有其它的异常， 包括中断和 fault，通通闭嘴。它的缺省值也是 0，表示没有关异常。</td>
+</tr>
+<tr>
+<td>BASEPRI</td>
+<td>这个寄存器最多有 9 位（由表达优先级的位数决定）。它定义了被屏蔽优先级的阈 值。当它被设成某个值后，所有优先级号大于等于此值的中断都被关（优先级号 越大，优先级越低）。但若被设成 0，则不关闭任何中断， 0 也是缺省值。</td>
+</tr>
+</tbody>
+</table>
+<p>  对于时间‐关键任务而言， PRIMASK 和 BASEPRI 对于暂时关闭中断是非常重要的。而FAULTMASK 则可以被 OS 用于暂时关闭 fault 处理机能，这种处理在某个任务崩溃时可能需要。因为在任务崩溃时，常常伴随着一大堆 faults。在系统料理“后事”时，通常不再需要响应这些 fault——人死帐清。总之 FAULTMASK 就是专门留给 OS 用的。</p>
+<p>要访问 PRIMASK, FAULTMASK 以及 BASEPRI，同样要使用 MRS/MSR 指令,如：</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192050636.png?imageSlim" alt="image-20240119205023921"></p>
+<p>PRIMASK、FAULTMASK 和 BASEPRI 寄存器不能设置为用户访问级别。</p>
+<h3 id="控制寄存器（CONTROL）">控制寄存器（CONTROL）</h3>
+<p>控制寄存器用于定义特权级别，还用于选择当前使用哪个堆栈指针</p>
+<table>
+<thead>
+<tr>
+<th>Bit</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CONTROL[1]</td>
+<td>堆栈指针选择<br>0=选择主堆栈指针 MSP（复位后缺省值）<br>1=选择进程堆栈指针 PSP <br>在线程或基础级（没有在响应异常——译注），可以使用 PSP。在 handler 模式下， 只允许使用 MSP，所以此时不得往该位写 1。</td>
+</tr>
+<tr>
+<td>CONTROL[0]</td>
+<td>0=特权级的线程模式<br>1=用户级的线程模式<br>Handler 模式永远都是特权级的。</td>
+</tr>
+</tbody>
+</table>
+<h4 id="CONTROL-1">CONTROL[1]</h4>
+<p>  在 Cortex‐M3 的 handler 模式中， CONTROL[1]总是 0。在线程模式中则可以为 0 或 1。仅当处于特权级的线程模式下，此位才可写，其它场合下禁止写此位。改变处理器的模式也有其它的方式：在异常返回时，通过修改 LR 的位 2，也能实现模式切换。 (<mark class="hl-label blue">目前不知道怎么切换\^_^</mark> )</p>
+<h4 id="CONTROL-0-不了解">CONTROL[0] (不了解)</h4>
+<p>目前不知道用处,懒得写</p>
+<h1>栈内存操作  (Stack Memory Operations)</h1>
+<h2 id="Cortex-M3-堆栈的实现">Cortex-M3 堆栈的实现</h2>
+<p>  <font color=red size=4>Cortex‐M3使用的是“向下生长的满栈”模型。</font>堆栈指针 SP 指向最后一个被压入堆栈的 32位数值。在下一次压栈(PUSH)时， SP 先自减 4，再存入新的数值。</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192124563.png?imageSlim" alt="image-20240119212453976"></p>
+<p>POP 操作刚好相反：先从 SP 指针处读出上一次被压入的值，再把 SP 指针自增</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192127126.png?imageSlim" alt="image-20240119212702647"></p>
+<h2 id="Cortex-M3-的双堆栈机制">Cortex-M3 的双堆栈机制</h2>
+<p>  我们已经知道了 CM3 的堆栈是分为两个：主堆栈和进程堆栈， CONTROL[1]决定如何选择。当 CONTROL[1]=0 时，只使用 MSP，此时用户程序和异常 handler 共享同一个堆栈。这也是复位后的缺省使用方式。</p>
+<p><strong>CONTROL[1]=0 时的堆栈使用情况</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192131463.png?imageSlim" alt="image-20240119213156004"></p>
+<p>  当 CONTROL[1]=1 时，线程模式将不再使用 MSP，而改用 PSP（ handler 模式永远使用MSP）。</p>
+<p>[^注释]: 此时，进入异常时的自动压栈使用的是进程堆栈，进入异常 handler 后才自动改为 MSP，退出 异常时切换回 PSP，并且从进程堆栈上弹出数据</p>
+<p><strong>CONTROL[1]=0 时的堆栈切换情况</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192134077.png?imageSlim" alt="image-20240119213453602"></p>
+<p>在特权级下，可以指定具体的堆栈指针，而不受当前使用堆栈的限制，示例代码如下：</p>
+<figure class="highlight arm"><table><tr><td class="code"><pre><span class="line"><span class="keyword">MRS</span> <span class="built_in">R0</span>, MSP <span class="comment">; 读取主堆栈指针到 R0</span></span><br><span class="line"><span class="keyword">MSR</span> MSP, <span class="built_in">R0</span> <span class="comment">; 写入 R0 的值到主堆栈中</span></span><br><span class="line"><span class="keyword">MRS</span> <span class="built_in">R0</span>, PSP <span class="comment">; 读取进程堆栈指针到 R0</span></span><br><span class="line"><span class="keyword">MSR</span> PSP, <span class="built_in">R0</span> <span class="comment">; 写入 R0 的值到进程堆栈中</span></span><br></pre></td></tr></table></figure>
+<p>  通过读取 PSP 的值， OS 就能够获取用户应用程序使用的堆栈，进一步地就知道了在发生异常时，被压入寄存器的内容，而且还可以把其它寄存器进一步压栈（使用STMDB和LDMIA的书写形式）。 OS 还可以修改 PSP，用于实现多任务中的任务上下文切换。</p>
+<h2 id="入栈操作">入栈操作</h2>
+<p>当CM3开始响应一个中断时，将会把8个寄存器的值压入栈</p>
+<h3 id="入栈">入栈</h3>
+<p>  响应异常的第一个行动，就是自动保存现场的必要部分：依次把xPSR, PC, LR, R12以及R3‐R0由硬件自动压入适当的堆栈中：如果当响应常时，当前的代码正在使用PSP，则压入PSP，即使用线程堆栈；否则压入MSP，使用主堆栈。一旦进入了服务例程，就将一直使用主堆栈。</p>
+<p>  假设入栈开始时， SP的值为N，则在入栈后，堆栈内部的变化如表9.1表示。又因为AHB接口上的流水线操作本质，地址和数据都在经过一个流水线周期之后才进入。另外，这种入栈在机器的内部，并不是严格按堆栈操作的顺序的——但是机器会保证：正确的寄存器将被<br>
+保存到正确的位置，如图9.1和 表9.1的第3列所示。</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192150322.png?imageSlim" alt="image-20240119215038188"></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401192151763.png?imageSlim" alt="image-20240119215113500" style="zoom:150%;" />
+<p>  CM3在看不见的内部打乱了入栈的顺序，这是有深层次的原因的。先把PC与xPSR的值保存，就可以更早地启动服务例程指令的预取——因为这需要修改PC；同时，也做到了在早期就可以更新xPSR中IPSR位段的值。<br>
+细心的读者一定在猜测：为啥袒护R0‐R3以及R12呢， R4‐R11就是下等公民？原来，在ARM上，有一套的C函数调用标准约定（《C/C++ Procedure Call Standard for the ARM Architecture》，AAPCS, Ref5）。个中原因就在它上面：它使得中断服务例程能用C语言编写，编译器优先使用被入栈的寄存器来保存中间结果（当然，如果程序过大也可能要用到R4‐R11，此时编译器负责生成代码来push它们。但是， ISR应该短小精悍，不要让系统如此操心——译者注）。<br>
+如果读者再仔细看，会发现R0‐R3, R12是最后被压进去的。这里也有一番良苦用心：为的是可以更容易地使用SP基址来索引寻址，（以及为了LDM等多重加载指令，因为LDM必须加载地址连续的一串数据）。参数的传递也是受益者：使之可以方便地通过压入栈的R0‐R3取出（主要为系统软件所利用，多见于SVC与PendSV中的参数传递）。</p>
+<h1>异常与NVIC(Exception &amp; Nested Vectored Interrupt Controller)</h1>
+<h2 id="系统异常清单-List-of-System-Exceptions">系统异常清单  (List of System Exceptions  )</h2>
+<p>  Cortex‐M3 在内核水平上搭载了一个异常响应系统， 支持为数众多的系统异常和外部中断。其中，编号为 1－15 的对应系统异常，大于等于 16 的则全是外部中断。除了个别异常的优先级被定死外， 其它异常的优先级都是可编程的</p>
+<p>  因为芯片设计者可以修改 CM3 的硬件描述源代码，所以做成芯片后，支持的中断源数目常常不到 240 个，并且优先级的位数也由芯片厂商最终决定。</p>
+<p>  类型编号为 1－15 的系统异常如表 所示（注意： 没有编号为 0 的异常），从 16 开始的外部中断类型。</p>
+<table>
+<thead>
+<tr>
+<th>ExceptionNumber<br>编号</th>
+<th>Exception Type<br>类型</th>
+<th>Priority<br>优先级</th>
+<th>Description<br>简介</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Reset(复位)</td>
+<td>-3（最高）</td>
+<td>复位</td>
+</tr>
+<tr>
+<td>2</td>
+<td>NMI</td>
+<td>-2</td>
+<td>不可屏蔽中断（来自外部 NMI 输入脚）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Hard Fault(硬件错误)</td>
+<td>-1</td>
+<td>所有被除能的 fault， 都将“上访” (escalation)成硬 fault。 只要 FAULTMASK 没有置位，硬 fault 服务例程就被强制执行。Fault 被除能的原因包括被禁用，或者 FAULTMASK 被置位。(程序出错)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>MemManage fault</td>
+<td>可编程</td>
+<td>内存管理故障； MPU 违规或访问 到非法地点</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Bus Fault(总线 fault)</td>
+<td>可编程</td>
+<td>从总线系统收到了错误响应，原因可以是预取流产（ Abort）或 数据流产，或者企图访问协处理器</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Usage Fault(用法错误)</td>
+<td>可编程</td>
+<td>由于程序错误导致的异常。 通常是使用了一条无效指令，或者是 非法的状态转换，例如尝试切换到 ARM 状态</td>
+</tr>
+<tr>
+<td>7-10</td>
+<td>保留</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>11</td>
+<td>SVCall</td>
+<td>可编程</td>
+<td>执行系统服务调用指令（SVC）引发的异常</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Debug Monitor(调试监视器)</td>
+<td>可编程</td>
+<td>调试监视器（断点，数据观察点，或者是外部调试请求</td>
+</tr>
+<tr>
+<td>13</td>
+<td>保留</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>14</td>
+<td>PendSV</td>
+<td>可编程</td>
+<td>为系统设备而设的“可悬挂请求”（pendable request）</td>
+</tr>
+<tr>
+<td>15</td>
+<td>SysTick</td>
+<td>可编程</td>
+<td>系统滴答定时器（也就是周期性溢出的时基定时器——译注）</td>
+</tr>
+<tr>
+<td>16</td>
+<td>IRQ #0</td>
+<td>可编程</td>
+<td>外部中断#0</td>
+</tr>
+<tr>
+<td>17</td>
+<td>IRQ #1</td>
+<td>可编程</td>
+<td>外部中断#1</td>
+</tr>
+<tr>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+<tr>
+<td>255</td>
+<td>IRQ #239</td>
+<td>可编程</td>
+<td>外中断#239</td>
+</tr>
+</tbody>
+</table>
+<h2 id="优先级的定义">优先级的定义</h2>
+<p>  在 CM3 中，优先级对于异常来说很关键的，它会影响一个异常是否能被响应，以及何时可以响应。<font color=red> 优先级的数值越小，则优先级越高</font>。 CM3 支持中断嵌套，使得高优先级异常会抢占(preempt)低优先级异常。有 3 个系统异常：复位， NMI 以及硬 fault，它们有固定的优先级，并且它们的优先级号是负数，从而高于所有其它异常。所有其它异常的优先级则都是可编程的（但不能编程为负数）。</p>
+<p> 原则上， CM3 支持 3 个固定的高优先级和多达 256 级的可编程优先级，并且支持 128级抢占。但是，绝大多数 CM3 芯片都会精简设计，以致实际上支持的优先级数会更少，如 8 级， 16 级， 32 级等。它们在设计时会裁掉表达优先级的几个低端有效位，以达到减少优先级数的目的。</p>
+<p>举例来说，如果只使用了 3 个位来表达优先级，则优先级配置寄存器的结构会如图所示：</p>
+  <img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401201810908.png?imageSlim" alt="image-20240120180206693" style="zoom:150%;" />
+<p> 在图中， [4:0]没有被实现，所以读它们总是返回零，写它们则忽略写入的值。因此，对于 3 个位的情况，我们能够使用的 8 个优先级为： 0x00（最高）， 0x20， 0x40， 0x60， 0x80，0xA0， 0xC0 以及 0xE0。</p>
+<p> 如果使用更多的位来表达优先级，则能够使用的值也更多，同时需要的门也更多——带来更多的成本和功耗。 CM3 允许的最少使用位数为 3 个位，亦即至少要支持 8 级优先级。</p>
+<p> 这里就有个疑问了,明明支持 256 个优先级，为啥只有 128 个抢占级，剩下一半哪儿去了？原来，为了使抢占机能变得更可控， CM3 还把 256 级优先级按位分成高低两段，分别是抢占优先级和亚(子)优先级，如下所述。</p>
+<p>   VIC 中有一个寄存器是“应用程序中断及复位控制寄存器”（内容见表 7.5），它里面有一个位段名为“优先级组”。该位段的值对每一个优先级可配置的异常都有影响——把其优先级分为个位段： MSB 所在的位段（左边的）对应抢占优先级，而 LSB 所在的位段（右边的）对应亚优先级，如表 7－4 所示。</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401201810143.png?imageSlim" alt="image-20240120181012035"></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401201810733.png?imageSlim" alt="image-20240120181035548"></p>
+<p> 抢占优先级决定了抢占行为：当系统正在响应某异常 L 时，如果来了抢占优先级更高的异常 H，则 H 可以抢占 L。亚优先级则处理“内务”：当抢占优先级相同的异常有不止一个悬起时，就优先响应亚优先级最高的异常(亚优先级不会抢占L，只会先执行,例如：如果一个亚优先级低的异常正在执行,此时来有一个亚优先级高的异常发生,此时亚优先级高的并不会抢占优先级低的异常,而是等 L 的执行完再执行 H )。</p>
+<p> 这种优先级分组规定：亚优先级至少是 1 个位。因此抢占优先级最多是 7 个位，造成了最多只有 128 级抢占的现象。</p>
+<p> 但是 CM3 允许从比特 7 处分组，此时所有的位都表达亚优先级，没有任何位表达抢占优先级，因而所有优先级可编程的异常之间就不会发生抢占——相当于在它们之中除能了CM3 的中断嵌套机制。当然还有凌架于法律之上的三位老大：复位， NMI 和硬 fault。它们无论何时出现，都立即无条件抢占所有优先级可编程的“平民异常”。</p>
+<p> 如果优先级完全相同的多个异常同时悬起，则先响应异常编号最小的那一个。如 IRQ #3会比 IRQ #5 先得到响应。</p>
+<p> 虽然优先级分组的功能很强大，但是粗心地更改会使它变得很暴力，尤其是在设计硬实时系统的时候，这简直就是在玩火——常常会改变系统的响应特性，导致某些关键任务有可能得不到及时响应，凶多吉少的意外随时可能猛烈发作。其实在绝大多数情况下，优先级的分组都要预先经过计算论证，并且在开机初始化时一次性地设置好，以后就再也不动它了。只有在绝对需要且绝对有把握时，才小心地更改，并且要经过尽可能充分的测试。另外，优先级组所在的寄存器 AIRCR（回顾表 7.5）也基本上是“一次成型”，只是需要手工产生复位时才写里面相应的位。</p>
+<h2 id="中断配置基础">中断配置基础</h2>
+<h3 id="中断的使能与除能">中断的使能与除能</h3>
+<p>中断的使能与除能分别使用各自的寄存器来控制，CM3 中可以有 240 对使能位／除能位，每个中断拥有一对。这 240 个对子分布在 8 对 32 位寄存器中（最后一对没有用完）。欲使能一个中断，你需要写 1 到对应 SETENA 的位中；欲除能一个中断，你需要写 1 到对应的 CLRENA 位中；如果往它们中写 0，不会有任何效果。SETENA 位和 CLRENA 位可以有 240 对，对应的 32 位寄存器可以有 8 对，因此使用数字后缀来区分这些寄存器，如 SETENA0, SETENA1…SETENA7，如表 8.1 所示。  又因为前 16 个异常已经分配给系统异常，故而中断 0 的异常号是 16。</p>
+<p>SETENAs: xE000E100 – 0xE000E11C ; CLRENAs:0xE000E180 - 0xE000E19C</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210124848.png?imageSlim" alt="image-20240121012359907"></p>
+<h3 id="中断的悬起与解悬">中断的悬起与解悬</h3>
+<p> 如果中断发生时，正在处理同级或高优先级异常，或者被掩蔽，则中断不能立即得到响应。此时中断被悬起。中断的悬起状态可以通过“中断设置悬起寄存器(SETPEND)”和“中断悬起清除寄存器(CLRPEND)”来读取，还可以写它们来手工悬起中断。</p>
+<p> 悬起寄存器和“解悬”寄存器也可以有 8 对，其用法和用量都与前面介绍的使能/除能寄存器完全相同，见表 8.2。<strong>SETPEND/CLRPEND 寄存器族  SETPENDs:0xE000E200 – 0xE000E21C ; CLRPENDs:0xE000E280 - 0xE000E29C</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210126922.png?imageSlim" alt="image-20240121012639031"></p>
+<h3 id="优先级的设置">优先级的设置</h3>
+<p>每个外部中断都有一个对应可编程的优先级寄存器，每个寄存器占用 8 位，但是允许最少只使用最高 3 位。根据前面的优先级组的设置，可以分为高低两个段位，分别是抢占和子优先级。如表8.3<br>
+<strong>中断优先级寄存器阵列  0xE000_E400 – 0xE000_E4EF</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210134195.png?imageSlim" alt="image-20240121013411983"></p>
+<h3 id="活动状态-ACTIVE-Status">活动状态(ACTIVE Status)</h3>
+<p>每个外部中断都有一个活动状态位。在处理器执行了其 ISR 的第一条指令后，它的活动位就被置 1，并且直到 ISR 返回时才硬件清零。由于支持嵌套，允许高优先级异常抢占某个ISR。然而，哪怕一个中断被抢占，其活动状态也依然为 1(只要某个中断没执行完，该状态就一直为1)</p>
+<p><strong>ACTIVE 寄存器族 0xE000_E300_0xE000_E31C</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210139946.png?imageSlim" alt="image-20240121013859908"></p>
+<h3 id="PRIMASK-与-FAULTMASK-特殊功能寄存器-PRIMASK-FAULTMASK-和-BASEPRI">[PRIMASK 与 FAULTMASK 特殊功能寄存器](#PRIMASK, FAULTMASK 和 BASEPRI )</h3>
+<h3 id="其它异常的配置寄存器">其它异常的配置寄存器</h3>
+<p> 用法fault，总线fault以及存储器管理fault都是特殊的异常，因此给它们开了小灶。其中，它们的使能控制是通过“系统Handler控制及状态寄存器(SHCSR)”来实现的。</p>
+<p> **系统Handler控制及状态寄存器SHCSR(System Handler  CTRL Status Reg)    地址：0xE000ED24  **</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210144020.png?imageSlim" alt="image-20240121014407219"></p>
+<p>下面讲中断控制及状态寄存器ICSR。对于NMI、 SysTick定时器以及PendSV，可以通过此寄存器手工悬起它们。<br>
+<strong>中断控制及状态寄存器ICSR    （地址：0xE000ED04）</strong></p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210146289.png?imageSlim" alt="image-20240121014604237"></p>
+<h2 id="SysTick定时器">SysTick定时器</h2>
+<p> SysTick定时器被捆绑在NVIC中，用于产生SYSTICK异常，操作系统硬件定时器来产生操作系统的滴答中断，作为整个系统的时基。</p>
+<p> Cortex‐M3处理器内部包含了一个简单的定时器。因为所有的CM3芯片都带有这个定时器，软件在不同 CM3器件间的移植工作得以化简。该定时器的时钟源可以是内部时钟（FCLK，CM3上的自由运行时钟），或者是外部时钟（ CM3处理器上的STCLK信号）。不过， STCLK的具体来源则由芯片设计者决定，因此不同产品之间的时钟频率可能会大不相同，你需要检视芯片的器件手册来决定选择什么作为时钟源。</p>
+<p>有4个寄存器控制SysTick定时器，如表8.9至表8.12所示。</p>
+<p><strong>SysTick控制及状态寄存器（地址：0xE000E010）</strong></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210208528.png?imageSlim" alt="image-20240121015402865" style="zoom:120%;" />
+<p><strong>SysTick重装载数值寄存器（地址：0xE000E014）</strong></p>
+  <img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210208466.png?imageSlim" alt="image-20240121015436472" style="zoom:150%;" />
+<p><strong>SysTick当前数值寄存器（地址：0xE000E018）</strong></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210208876.png?imageSlim" alt="image-20240121015526650" style="zoom:120%;" />
+<p><strong>SysTick校准数值寄存器（地址：0xE000E01C）</strong></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210208017.png?imageSlim" alt="image-20240121015604781" style="zoom:120%;" />
+<p>SysTick定时器除了能服务于操作系统之外，还能用于其它目的：如作为一个闹铃，用于测量时间等。要注意的是，当处理器在调试期间被喊停（halt）时，则SysTick定时器亦将暂停运作。</p>
+<h2 id="向量表">向量表</h2>
+<p> 当发生了异常并且要响应它时， CM3 需要定位其处理例程的入口地址。这些入口地址存储在所谓的“（异常）向量表”中。缺省情况下， CM3 认为该表位于零地址处，且各向量占用 4 字节，因此每个表项占用 4 字节，如表 7.6 所示。</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401202119560.png?imageSlim" alt="image-20240120211952014"></p>
+<p><font color=yellow>因为地址 0 处应该存储引导代码，所以它通常是 Flash 或者是 ROM 器件，并且它们的值不得在运行时改变。</font></p>
+<h2 id="中断／异常的响应序列">中断／异常的响应序列</h2>
+<p>当CM3开始响应一个中断时，会在它看不见的体内奔涌起三股暗流：</p>
+<ul>
+<li>入栈： 把8个寄存器的值压入栈。</li>
+<li>取向量：从向量表中找出对应的服务程序入口地址</li>
+<li>选择堆栈指针MSP/PSP，更新堆栈指针SP，更新连接寄存器LR，更新程序计数器PC</li>
+</ul>
+<h3 id="入栈-2">入栈</h3>
+<p><a href="#%E5%85%A5%E6%A0%88%E6%93%8D%E4%BD%9C">入栈操作过程</a></p>
+<h3 id="取向量">取向量</h3>
+<p> 当数据总线（系统总线）正在为入栈操作而忙得团团转时，指令总线（I‐Code总线）可不是凉快地坐着看热闹——它正在为响应中断紧张有序地执行另一项重要的任务：从向量表中找出正确的异常向量，然后在服务程序的入口处预取指。由此可以看到各自都有专用总线的好处：入栈与取指这两个工作能同时进行。</p>
+<h3 id="更新寄存器">更新寄存器</h3>
+<p>在入栈和取向量的工作都完毕之后，执行服务例程之前，还要更新一系列的寄存器：</p>
+<ul>
+<li>SP：在入栈中会把堆栈指针（PSP或MSP）更新到新的位置。在执行服务例程后，将由MSP负责对堆栈的访问。</li>
+<li>PSR： IPSR位段（地处PSR的最低部分）会被更新为新响应的异常编号</li>
+<li>PC：在向量取出完毕后， PC将指向服务例程的入口地址，</li>
+<li>LR： LR的用法将被重新解释，其值也被更新成一种特殊的值，称为“EXC_RETURN”，<br>
+并且在异常返回时使用。 EXC_RETURN的二进制值除了最低4位外全为1，而其最低4<br>
+位则有另外的含义</li>
+</ul>
+<h2 id="异常返回-Exception-Return">异常返回(Exception Return)</h2>
+<p>当异常服务例程执行完毕后，需要很正式地做一个“异常返回”动作序列，从而恢复先前的系统状态，才能使被中断的程序得以继续执行。</p>
+<h3 id="异常返回值">异常返回值</h3>
+<p>在进入异常服务程序后， LR的值被自动更新为特殊的EXC_RETURN，这是一个高28位全为1的值，只有[3:0]\ (M3) 的值有特殊含义，如表9.3所示。当异常服务例程把这个<br>
+值送往PC时，就会启动处理器的中断返回序列。因为LR的值是由CM3自动设置的，所以只要没有特殊需求，就不要改动它(除非切换为进程堆栈)。</p>
+<p><strong>EXC_RETURN位段详解</strong></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210209325.png?imageSlim" alt="image-20240121020245086" style="zoom:120%;" />    
+<p>可以得出，合法的EXC_RETURN值共3个，如表9.4所示</p>
+<p><strong>合法的EXC_RETURN值及其功能</strong></p>
+<img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202401210209651.png?imageSlim" alt="image-20240121020413395" style="zoom:120%;" />
+<p> 如果主程序在线程模式下运行，并且在使用MSP时被中断 ，则在服务例程中LR=0xFFFF_FFF9（主程序被打断前的LR已被自动入栈）。<br>
+ 如果主程序在线程模式下运行 ，并且在使用PSP时被中断 ，则在服务例程中LR=0xFFFF_FFFD（主程序被打断前的LR已被自动入栈）。</p>
+]]></content>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Rtos</tag>
+        <tag>Cortex-M3g</tag>
       </tags>
   </entry>
   <entry>
