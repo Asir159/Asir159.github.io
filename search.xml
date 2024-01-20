@@ -32,7 +32,7 @@
 <p>软件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 0和ADC_CFGR寄存器中的JQDIS = 1,选择软件触发，在使能ADC_CR寄存器的JADSTART位开始进行转换<br>
 硬件触发:由ADC_JSQR寄存器里的JEXTEN[1:0] = 其他 ,选择触发极性, 在JEXSEL[4:0]中选择事件触发并开始转换.</p>
 <p><strong>注入组外部触发事件表：</strong></p>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212058453.png?imageSlim" alt="image-20231221205812384">131</p>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312212058453.png?imageSlim" alt="image-20231221205812384"></p>
 ]]></content>
       <categories>
         <category>Stm32学习笔记</category>
@@ -1782,6 +1782,24 @@ c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v3000 v585 h43z'/></svg></span></span
       </tags>
   </entry>
   <entry>
+    <title>基于F1系列的波特率计算</title>
+    <url>/posts/88addc63.html</url>
+    <content><![CDATA[<h1>换算过程</h1>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"><span class="comment">/*  */</span></span><br><span class="line"><span class="comment">/* Mantissa : 整数 */</span></span><br><span class="line"><span class="comment">/* Fraction : 小数 */</span></span><br><span class="line">whil</span><br><span class="line">USARTDIV = Mantissa + ( Fraction / <span class="number">16</span>)         (十进制数表示值)</span><br><span class="line">USARTDIV = Mantissa + Fraction * <span class="number">16</span>            (十六进制表示值)</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 写入UART-&gt;BRR的值为 */</span></span><br><span class="line">UART-&gt;BRR = (Mantissa &lt;&lt; <span class="number">4</span>) + (Fraction * <span class="number">16</span>) + <span class="number">0.5</span>  =           (Fraction * <span class="number">16</span> ( 十进制转<span class="number">16</span>进制) 整数&lt;&lt; <span class="number">4</span> 位存放BRR的高位)</span><br><span class="line">UART-&gt;BRR = USARTDIV * <span class="number">16</span> + <span class="number">0.5</span>                                  (加<span class="number">0.5</span> 偏移值(相当于四舍五入)) </span><br><span class="line"></span><br><span class="line"><span class="comment">/* 波特率的计算方法 */</span></span><br><span class="line"><span class="comment">/* Buad :  波特率 */</span></span><br><span class="line"><span class="comment">/* Fck :  系统时钟频率 */</span></span><br><span class="line">Buad = Fck / (<span class="number">16</span> * USARTDIV)</span><br><span class="line">USARTDIV = Fck / (<span class="number">16</span> * Buad)</span><br><span class="line"><span class="comment">/* 上式得知 */</span></span><br><span class="line">UART-&gt;BRR = Fck / (<span class="number">16</span> * Buad) * <span class="number">16</span> + <span class="number">0.5</span> = fck / Buad + <span class="number">0.5</span></span><br></pre></td></tr></table></figure>
+<h1>波特率设置公式推演</h1>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211940055.png?imageSlim" alt="image-20231221194027013"></p>
+<h2 id="BRR寄存器的值">BRR寄存器的值</h2>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211948810.png?imageSlim" alt="image-20231221194819501"></p>
+]]></content>
+      <categories>
+        <category>Stm32学习笔记</category>
+      </categories>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Stm32F1</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>初识Cortex-M</title>
     <url>/posts/6c4c224e.html</url>
     <content><![CDATA[<blockquote>
@@ -2221,24 +2239,6 @@ c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v3000 v585 h43z'/></svg></span></span
       </tags>
   </entry>
   <entry>
-    <title>基于F1系列的波特率计算</title>
-    <url>/posts/88addc63.html</url>
-    <content><![CDATA[<h1>换算过程</h1>
-<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"><span class="comment">/*  */</span></span><br><span class="line"><span class="comment">/* Mantissa : 整数 */</span></span><br><span class="line"><span class="comment">/* Fraction : 小数 */</span></span><br><span class="line">whil</span><br><span class="line">USARTDIV = Mantissa + ( Fraction / <span class="number">16</span>)         (十进制数表示值)</span><br><span class="line">USARTDIV = Mantissa + Fraction * <span class="number">16</span>            (十六进制表示值)</span><br><span class="line"></span><br><span class="line"><span class="comment">/* 写入UART-&gt;BRR的值为 */</span></span><br><span class="line">UART-&gt;BRR = (Mantissa &lt;&lt; <span class="number">4</span>) + (Fraction * <span class="number">16</span>) + <span class="number">0.5</span>  =           (Fraction * <span class="number">16</span> ( 十进制转<span class="number">16</span>进制) 整数&lt;&lt; <span class="number">4</span> 位存放BRR的高位)</span><br><span class="line">UART-&gt;BRR = USARTDIV * <span class="number">16</span> + <span class="number">0.5</span>                                  (加<span class="number">0.5</span> 偏移值(相当于四舍五入)) </span><br><span class="line"></span><br><span class="line"><span class="comment">/* 波特率的计算方法 */</span></span><br><span class="line"><span class="comment">/* Buad :  波特率 */</span></span><br><span class="line"><span class="comment">/* Fck :  系统时钟频率 */</span></span><br><span class="line">Buad = Fck / (<span class="number">16</span> * USARTDIV)</span><br><span class="line">USARTDIV = Fck / (<span class="number">16</span> * Buad)</span><br><span class="line"><span class="comment">/* 上式得知 */</span></span><br><span class="line">UART-&gt;BRR = Fck / (<span class="number">16</span> * Buad) * <span class="number">16</span> + <span class="number">0.5</span> = fck / Buad + <span class="number">0.5</span></span><br></pre></td></tr></table></figure>
-<h1>波特率设置公式推演</h1>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211940055.png?imageSlim" alt="image-20231221194027013"></p>
-<h2 id="BRR寄存器的值">BRR寄存器的值</h2>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211948810.png?imageSlim" alt="image-20231221194819501"></p>
-]]></content>
-      <categories>
-        <category>Stm32学习笔记</category>
-      </categories>
-      <tags>
-        <tag>Stm32</tag>
-        <tag>Stm32F1</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>基于G4的GPIO复用</title>
     <url>/posts/717d6ba8.html</url>
     <content><![CDATA[<p>Stm32G431RBT6 没有时钟复用功能,     使用复用功能时， 使用GPIOx_AFRL 与 GPIOx_AFRH 寄存器 来配置复用端口。</p>
@@ -2253,6 +2253,30 @@ c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v3000 v585 h43z'/></svg></span></span
       <tags>
         <tag>Stm32</tag>
         <tag>Stm32G4</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>独立看门狗(IWGD)与窗口看门狗(WWGD)</title>
+    <url>/posts/b7171331.html</url>
+    <content><![CDATA[<h1>独立看门狗</h1>
+<h2 id="IWGD溢出时间计算">IWGD溢出时间计算</h2>
+<mark class="hl-label red">Tout=psc*rlr/Fiwdg</mark>  
+<p><code>其中psc : 分频系数(4 * 2^prer  prer 0~7) 最大值位256</code>,<code>rlr : 重装载值</code>,<code>Fiwdg : 独立看门狗的时钟频率(40khz)</code></p>
+<h2 id="独立看门狗溢出时间表">独立看门狗溢出时间表</h2>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312301246785.png?imageSlim" alt="image-20231230124657033"></p>
+<h1><strong>窗口看门狗</strong></h1>
+<h2 id="WWGD溢出时间计算">WWGD溢出时间计算</h2>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line"><span class="comment">/* Fwwdg : 独立看门狗的时钟频率(40khz) */</span></span><br><span class="line"><span class="comment">/* psc : 分频系数(4 * 2^prer  prer 0~7) 最大值位256 */</span></span><br><span class="line"><span class="comment">/* rlr : 重装载值 */</span></span><br><span class="line"><span class="comment">/* WDGTB : WWDG时基 */</span></span><br><span class="line"><span class="comment">/* T[5:0] : WWGD计数器低6位, T[6:0]都为1时/2 + 1 */</span></span><br><span class="line">Tout = <span class="number">4096</span> * <span class="number">2</span>^WDGTB * (T[<span class="number">5</span>:<span class="number">0</span>] + <span class="number">1</span>) / Fwwdg</span><br></pre></td></tr></table></figure>
+<h2 id="窗口看门狗寄存器框图">窗口看门狗寄存器框图</h2>
+<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211530308.png?imageSlim" alt="image-20231221153000290"></p>
+<mark class="hl-label green">当计数器T[6:0]>W[6:0]\(窗口上限值)产生复位(W[6:0])为窗口上限值当计算器T6为0时,</mark> <mark class="hl-label blue">及0x40-1=0x3F</mark> <mark class="hl-label green">此时产生复位</mark> 
+]]></content>
+      <categories>
+        <category>Stm32学习笔记</category>
+      </categories>
+      <tags>
+        <tag>Stm32</tag>
+        <tag>Stm32F1</tag>
       </tags>
   </entry>
   <entry>
@@ -2348,30 +2372,6 @@ U_n &amp;= IR_n \\
         <tag>模电</tag>
         <tag>数电</tag>
         <tag>基础电路知识</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>独立看门狗(IWGD)与窗口看门狗(WWGD)</title>
-    <url>/posts/b7171331.html</url>
-    <content><![CDATA[<h1>独立看门狗</h1>
-<h2 id="IWGD溢出时间计算">IWGD溢出时间计算</h2>
-<mark class="hl-label red">Tout=psc*rlr/Fiwdg</mark>  
-<p><code>其中psc : 分频系数(4 * 2^prer  prer 0~7) 最大值位256</code>,<code>rlr : 重装载值</code>,<code>Fiwdg : 独立看门狗的时钟频率(40khz)</code></p>
-<h2 id="独立看门狗溢出时间表">独立看门狗溢出时间表</h2>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312301246785.png?imageSlim" alt="image-20231230124657033"></p>
-<h1><strong>窗口看门狗</strong></h1>
-<h2 id="WWGD溢出时间计算">WWGD溢出时间计算</h2>
-<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line"><span class="comment">/* Fwwdg : 独立看门狗的时钟频率(40khz) */</span></span><br><span class="line"><span class="comment">/* psc : 分频系数(4 * 2^prer  prer 0~7) 最大值位256 */</span></span><br><span class="line"><span class="comment">/* rlr : 重装载值 */</span></span><br><span class="line"><span class="comment">/* WDGTB : WWDG时基 */</span></span><br><span class="line"><span class="comment">/* T[5:0] : WWGD计数器低6位, T[6:0]都为1时/2 + 1 */</span></span><br><span class="line">Tout = <span class="number">4096</span> * <span class="number">2</span>^WDGTB * (T[<span class="number">5</span>:<span class="number">0</span>] + <span class="number">1</span>) / Fwwdg</span><br></pre></td></tr></table></figure>
-<h2 id="窗口看门狗寄存器框图">窗口看门狗寄存器框图</h2>
-<p><img src="https://pic-bed-1323260560.cos.ap-guangzhou.myqcloud.com/202312211530308.png?imageSlim" alt="image-20231221153000290"></p>
-<mark class="hl-label green">当计数器T[6:0]>W[6:0]\(窗口上限值)产生复位(W[6:0])为窗口上限值当计算器T6为0时,</mark> <mark class="hl-label blue">及0x40-1=0x3F</mark> <mark class="hl-label green">此时产生复位</mark> 
-]]></content>
-      <categories>
-        <category>Stm32学习笔记</category>
-      </categories>
-      <tags>
-        <tag>Stm32</tag>
-        <tag>Stm32F1</tag>
       </tags>
   </entry>
 </search>
